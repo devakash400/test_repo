@@ -1,29 +1,33 @@
 const express = require("express");
 const { sendSuccess, sendError } = require("../utils/response");
 const { appendClientErrorLog } = require("../utils/error-log-writer");
+const { getOrderById } = require("../services/orders");
 
 const router = express.Router();
 
 router.get("/health", (req, res) => {
-  return sendSuccess(
-    res,
-    req,
-    {
-      status: "up",
-    },
-    "Service is healthy"
-  );
+  return sendSuccess(res, req, { status: "up" }, "Service is healthy");
 });
 
-router.get("/orders/:orderId", (req, res) => {
-  return sendSuccess(
-    res,
-    req,
-    {
-      orderId: req.params.orderId,
-    },
-    "Order fetched"
-  );
+/**
+ * GET /api/orders/:orderId
+ *
+ * Always sets `x-correlation-id` response header (via correlationIdMiddleware).
+ * The `correlationId` is also present in the response body on both success and error.
+ *
+ * Frontend flow:
+ *   1. Call this endpoint.
+ *   2. Read `x-correlation-id` from the response header.
+ *   3. If the response is an error (non-2xx), call POST /api/client-errors
+ *      with that correlationId + error details.
+ */
+router.get("/orders/:orderId", (req, res, next) => {
+  try {
+    const order = getOrderById(req.params.orderId);
+    return sendSuccess(res, req, order, "Order fetched");
+  } catch (err) {
+    return next(err);
+  }
 });
 
 router.post("/client-errors", async (req, res, next) => {
